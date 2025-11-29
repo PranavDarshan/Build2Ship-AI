@@ -13,6 +13,9 @@ import threading
 import queue
 import time
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -20,6 +23,7 @@ CORS(app)
 # Global state
 current_container = None
 workspace_path = "/workspace"
+openai_api_key = os.getenv('OPENAI_API_KEY', '')
 
 
 def run_docker_command(container, cmd, capture_output=True, timeout=30):
@@ -394,10 +398,13 @@ def get_status():
 @app.route('/api/ai/chat', methods=['POST'])
 def ai_chat():
     """Handle AI chat requests"""
-    global current_container
+    global current_container, openai_api_key
 
     if not current_container:
         return jsonify({"success": False, "error": "No container attached"})
+
+    if not openai_api_key:
+        return jsonify({"success": False, "error": "OpenAI API key not configured. Please add OPENAI_API_KEY to .env file"})
 
     data = request.json
     message = data.get('message', '').strip()
@@ -406,19 +413,25 @@ def ai_chat():
         return jsonify({"success": False, "error": "No message provided"})
 
     try:
-        # Execute chat script in container
-        result = run_docker_command(
-            current_container,
-            ["bash", "-c", f"cd /workspace && echo '{message}' | /opt/venv/bin/python /tmp/chat_inside.py"],
+        docker_cmd = ["docker", "exec", current_container] + \
+                    ["-e", f"OPENAI_API_KEY={openai_api_key}"] + \
+                    ["bash", "-c", f"cd /workspace && echo '{message}' | /opt/venv/bin/python /tmp/chat_inside.py"]
+
+        result = subprocess.run(
+            docker_cmd,
+            capture_output=True,
+            text=True,
             timeout=60
         )
 
         return jsonify({
-            "success": result["success"],
-            "response": result.get("stdout", ""),
-            "error": result.get("stderr", ""),
-            "returncode": result.get("returncode", -1)
+            "success": result.returncode == 0,
+            "response": result.stdout,
+            "error": result.stderr,
+            "returncode": result.returncode
         })
+    except subprocess.TimeoutExpired:
+        return jsonify({"success": False, "error": "Request timed out", "returncode": -1})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
