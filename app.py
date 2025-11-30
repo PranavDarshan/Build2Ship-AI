@@ -417,7 +417,7 @@ def ai_chat():
         return jsonify({"success": False, "error": "No container attached"})
 
     if not openai_api_key:
-        return jsonify({"success": False, "error": "OpenAI API key not configured. Please add OPENAI_API_KEY to .env file"})
+        return jsonify({"success": False, "error": "OPENAI_API_KEY not configured. Please add it to .env file"})
 
     data = request.json
     message = data.get('message', '').strip()
@@ -426,30 +426,41 @@ def ai_chat():
         return jsonify({"success": False, "error": "No message provided"})
 
     try:
-        # Set environment variable and run command in container
+        # Escape single quotes in message for shell
+        escaped_message = message.replace("'", "'\"'\"'")
+
+        # Run the chat script with the message as input
         docker_cmd = [
             "docker", "exec",
             "-e", f"OPENAI_API_KEY={openai_api_key}",
             current_container,
-            "bash", "-c",
-            f"cd /workspace && echo '{message}' | /opt/venv/bin/python /tmp/chat_inside.py"
+            "/opt/venv/bin/python", "/tmp/chat_inside.py"
         ]
 
-        result = subprocess.run(
+        # Create a process that can receive the message via stdin
+        process = subprocess.Popen(
             docker_cmd,
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=60
+            bufsize=1
         )
 
+        # Send message and get response with timeout
+        try:
+            stdout, stderr = process.communicate(input=message + '\nexit\n', timeout=120)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate()
+            return jsonify({"success": False, "error": "Request timed out", "returncode": -1})
+
         return jsonify({
-            "success": result.returncode == 0,
-            "response": result.stdout,
-            "error": result.stderr,
-            "returncode": result.returncode
+            "success": process.returncode == 0,
+            "response": stdout,
+            "error": stderr if stderr else "",
+            "returncode": process.returncode
         })
-    except subprocess.TimeoutExpired:
-        return jsonify({"success": False, "error": "Request timed out", "returncode": -1})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 

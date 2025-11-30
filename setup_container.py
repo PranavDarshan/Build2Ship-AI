@@ -120,25 +120,54 @@ def main():
         print()
         print_success("Container setup completed successfully!")
         print()
-        print(f"{Colors.BOLD}Next Steps:{Colors.END}")
-        print(f"  To start chatting, run: python3 chat.py {container_name}")
-        print(f"  To remove container later: docker rm -f {container_name}")
+        print(f"{Colors.BOLD}Container Status:{Colors.END}")
+        print_success(f"Container is running: {container_name}")
         print()
+        print(f"{Colors.BOLD}Next Steps:{Colors.END}")
+        print(f"  1. To start chatting, run: python3 chat.py {container_name}")
+        print(f"  2. Press Ctrl+D or type 'exit' to end the chat session")
+        print()
+        print_info("The container will remain running. When ready to cleanup:")
+        print(f"  • Run: docker rm -f {container_name}")
+        print()
+        print_info("Waiting for your confirmation...")
+
+        try:
+            while True:
+                user_input = input(f"Press Enter to continue (or type 'cleanup' to remove container): ").strip().lower()
+                if user_input == 'cleanup':
+                    if get_user_confirmation("Are you sure you want to delete the container?", default=False):
+                        cleanup_container(container_name)
+                    break
+                elif user_input == '':
+                    print_info("Setup complete. Container is ready to use.")
+                    break
+        except (EOFError, KeyboardInterrupt):
+            print()
+            print_warning("Received exit signal")
+            if get_user_confirmation("Do you want to delete the container?", default=False):
+                cleanup_container(container_name)
+            else:
+                print_info(f"Container {container_name} is still running")
 
     except KeyboardInterrupt:
         print()
         print_warning("Operation interrupted by user")
 
-        if container_id and get_user_confirmation("Do you want to delete the container?", default=True):
+        if container_id and get_user_confirmation("Do you want to delete the container?", default=False):
             cleanup_container(container_name)
+        else:
+            print_info(f"Container {container_name} is still running")
 
         sys.exit(130)
 
     except Exception as e:
         print_error(f"Unexpected error: {e}")
 
-        if container_id and get_user_confirmation("Do you want to delete the container?", default=True):
+        if container_id and get_user_confirmation("Do you want to delete the container?", default=False):
             cleanup_container(container_name)
+        else:
+            print_info(f"Container {container_name} is still running")
 
         sys.exit(1)
 
