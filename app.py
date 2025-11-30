@@ -126,6 +126,19 @@ def list_files():
         clean_path = path.lstrip('.').lstrip('/')
         full_path = f"/workspace/{clean_path}" if clean_path else "/workspace"
 
+    # First check if workspace exists, if not create it
+    check_result = run_docker_command(
+        current_container,
+        ["test", "-d", "/workspace"]
+    )
+
+    if not check_result["success"]:
+        # Create workspace directory
+        run_docker_command(
+            current_container,
+            ["mkdir", "-p", "/workspace"]
+        )
+
     # List directory contents
     result = run_docker_command(
         current_container,
@@ -413,9 +426,14 @@ def ai_chat():
         return jsonify({"success": False, "error": "No message provided"})
 
     try:
-        docker_cmd = ["docker", "exec", current_container] + \
-                    ["-e", f"OPENAI_API_KEY={openai_api_key}"] + \
-                    ["bash", "-c", f"cd /workspace && echo '{message}' | /opt/venv/bin/python /tmp/chat_inside.py"]
+        # Set environment variable and run command in container
+        docker_cmd = [
+            "docker", "exec",
+            "-e", f"OPENAI_API_KEY={openai_api_key}",
+            current_container,
+            "bash", "-c",
+            f"cd /workspace && echo '{message}' | /opt/venv/bin/python /tmp/chat_inside.py"
+        ]
 
         result = subprocess.run(
             docker_cmd,

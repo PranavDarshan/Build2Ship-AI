@@ -1152,16 +1152,18 @@
             refreshContainers();
             setupResizer();
 
-            // Terminal input
+            // Terminal input - Enter key
             document.getElementById('terminalInput').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
+                    e.preventDefault();
                     runTerminalCommand();
                 }
             });
 
-            // AI input
+            // AI input - Enter key
             document.getElementById('aiInput').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
+                    e.preventDefault();
                     sendAIMessage();
                 }
             });
@@ -1184,6 +1186,16 @@
                     } else if (e.key === 'Enter') {
                         e.preventDefault();
                         runCode();
+                    }
+                } else if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                    // Check if focus is in specific input fields
+                    const activeElement = document.activeElement;
+                    if (activeElement.id === 'terminalInput') {
+                        e.preventDefault();
+                        runTerminalCommand();
+                    } else if (activeElement.id === 'aiInput') {
+                        e.preventDefault();
+                        sendAIMessage();
                     }
                 }
             });
